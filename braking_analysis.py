@@ -75,11 +75,11 @@ def create_model():
     sedan.Initialize()
 
     # No visualization assets are needed for a batch/DOE run.
-    sedan.SetChassisVisualizationType(veh.VisualizationType_NONE)
-    sedan.SetSuspensionVisualizationType(veh.VisualizationType_NONE)
-    sedan.SetSteeringVisualizationType(veh.VisualizationType_NONE)
-    sedan.SetWheelVisualizationType(veh.VisualizationType_NONE)
-    sedan.SetTireVisualizationType(veh.VisualizationType_NONE)
+    # sedan.SetChassisVisualizationType(veh.VisualizationType_NONE)
+    # sedan.SetSuspensionVisualizationType(veh.VisualizationType_NONE)
+    # sedan.SetSteeringVisualizationType(veh.VisualizationType_NONE)
+    # sedan.SetWheelVisualizationType(veh.VisualizationType_NONE)
+    # sedan.SetTireVisualizationType(veh.VisualizationType_NONE)
 
     terrain = veh.RigidTerrain(sedan.GetSystem())
     mat = chrono.ChContactMaterialNSC()

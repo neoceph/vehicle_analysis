@@ -45,37 +45,18 @@ Expected Output: The script will save `braking_performance.png` inside the `resu
 ### Stage 3: Blender 3D Animation Generation
 This script creates a `.blend` file completely from scratch. It builds placeholder 3D geometry for the chassis and wheels, reads the `simulation_telemetry.csv`, and inserts precise location and rotation keyframes.
 
-Because this script requires the bpy module, you cannot run it with a standard python command. You must run it using Blender's background executable via your terminal/command prompt.
+This script requires the bpy module and uses Blender's background executable to generate a series of temporary .png and then .mp4.
 
 You can install bpy modules using the command `pip install bpy`.
 
-Run the appropriate command for your operating system:
-
-Windows:
-
-   ```bash
-   "Installation\directionr\of\Blender 4.0\blender.exe" --background --python 3_build_blend.py
-   ```
-
-macOS:
-
-   ```bash
-   /Applications/Blender.app/Contents/MacOS/Blender --background --python 3_build_blend.py
-   ```
-
-Linux:
-
-   ```bash
-   blender --background --python 3_build_blend.py
-   ```
+```bash
+   python braking_animation.py
+```
 
 Expected Output: The terminal will output SUCCESS! Blender file generated, and an `animated_sedan.blend` file will appear in your results/ folder.
 
-### Stage 4: Open & Play in Blender
-1. Navigate to your `results/` folder.
-2. Double-click the generated animated_sedan.blend file to open it in Blender's GUI.
-3. Press the Spacebar to play the timeline.
-4. You will see the vehicle tracking perfectly with the PyChrono physics. From here, you can parent high-resolution `.obj` vehicle meshes to these blocks, apply road textures, set up lighting, and render your final video.
+### Stage 4: Render the animation using Blender
+Use the script `render_blender.py` to generate the `.png` sequence and `.mp4` files of the animation of the simulation as a video. This workflow could be improved and video file could be directly generated but requires further tweaking with bpy. For now, in the interest of time, video is generated through image sequence.
 
 ### General Workflow Principles
 
@@ -98,16 +79,6 @@ Expected Output: The terminal will output SUCCESS! Blender file generated, and a
 9. **Verify numerics:** Repeat at 2, 1, and 0.5 ms. Stopping distance should converge.
 
 10. **Validate the model:** Compare against track data using the same speed, payload, tire pressure, and road friction.
-
-
-### Recommended Parameter Study
-Run a factorial sweep over road friction (`0.3, 0.6, 0.9`), speed (`50, 80, 100 km/h`), payload, brake rise time, and front/rear brake capacity. For each case retain:
-
-- Stopping distance and time.
-- Mean and peak deceleration.
-- Pitch and axle load transfer.
-- Wheel slip ratio and lock time.
-- Tire longitudinal forces and utilization.
 
 ## Sources
 

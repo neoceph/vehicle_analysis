@@ -35,10 +35,10 @@ Expected Output: The script will create a `results/ directory` containing `simul
 ### Stage 2: Data Analysis & Graphing (On-Demand)
 This script loads the telemetry artifact to generate analysis graphs on-demand without recalculating the physics.
 
-1. In the same terminal, run the following command:
-   ```bash
-   python graph_generation.py
-   ```
+In the same terminal, run the following command:
+```bash
+python graph_generation.py
+```
 
 Expected Output: The script will save `braking_performance.png` inside the `results/ folder`, clearly annotated with the final stopping time and distance.
 
@@ -46,6 +46,8 @@ Expected Output: The script will save `braking_performance.png` inside the `resu
 This script creates a `.blend` file completely from scratch. It builds placeholder 3D geometry for the chassis and wheels, reads the `simulation_telemetry.csv`, and inserts precise location and rotation keyframes.
 
 Because this script requires the bpy module, you cannot run it with a standard python command. You must run it using Blender's background executable via your terminal/command prompt.
+
+You can install bpy modules using the command `pip install bpy`.
 
 Run the appropriate command for your operating system:
 

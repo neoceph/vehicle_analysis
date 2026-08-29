@@ -19,10 +19,8 @@ The normalized Chrono braking input is not hydraulic pressure. It scales the bra
 
 ## Decoupled Execution Workflow
 
-The simulation uses a data-driven, decoupled architecture. This separates the heavy physics calculations from post-processing and 3D rendering. 
 The simulation uses a data-driven, decoupled architecture. This separates the heavy physics calculations from post-processing and 3D rendering. All necessary vehicle models, mesh assets (`.obj`, `.mtl`), subsystem configurations (`.json`), and tire specifications (`.tir`) are stored locally within the repository under `data/vehicle/sedan/`, making the project fully standalone and portable without relying on external Chrono installation data directories.
 
-Ensure you have installed a PyChrono 10 build with the Vehicle module and configured its data directory.
 ### Local Data Directory Structure
 ```
 data/

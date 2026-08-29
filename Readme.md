@@ -50,7 +50,7 @@ This script requires the bpy module and uses Blender's background executable to 
 You can install bpy modules using the command `pip install bpy`.
 
 ```bash
-   python blender_export.py
+python blender_export.py
 ```
 
 Expected Output: The terminal will output SUCCESS! Blender file generated, and an `animated_sedan.blend` file will appear in your results/ folder.
@@ -59,7 +59,7 @@ Expected Output: The terminal will output SUCCESS! Blender file generated, and a
 Use the script `render_blender.py` to generate the `.png` sequence and `.mp4` files of the animation of the simulation as a video. This workflow could be improved and video file could be directly generated but requires further tweaking with bpy. For now, in the interest of time, video is generated through image sequence.
 
 ```bash
-   python blender_export.py
+python render_blender.py
 ```
 
 ### General Workflow Principles

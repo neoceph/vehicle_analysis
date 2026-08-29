@@ -15,7 +15,10 @@ class BrakingSimulation:
 
     def _setup_model(self):
         """Initializes the PyChrono Sedan and terrain."""
-        veh.SetVehicleDataPath(chrono.GetChronoDataPath() + 'vehicle/')
+        script_dir = Path(__file__).resolve().parent
+        data_dir = script_dir / "data"
+        chrono.SetChronoDataPath(str(data_dir) + "/")
+        veh.SetVehicleDataPath(str(data_dir / "vehicle") + "/")
         
         self.sedan = veh.Sedan()
         self.sedan.SetContactMethod(chrono.ChContactMethod_NSC)

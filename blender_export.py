@@ -238,16 +238,22 @@ if __name__ == "__main__":
     # Programmatically ask PyChrono where it installed its data files!
     chrono_data_dir = chrono.GetChronoDataPath()
     sedan_dir = os.path.join(chrono_data_dir, "vehicle", "sedan")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sedan_dir = os.path.join(script_dir, "data", "vehicle", "sedan")
 
     # Build exact paths to the meshes inside the Conda environment
+    # Build paths to the local meshes and textures
     assets = {
         "chassis_obj": os.path.join(sedan_dir, "sedan_chassis_vis.obj"),
         "wheel_obj": os.path.join(sedan_dir, "sedan_tire.obj"),
         "road_texture": "realistic_road.jpg"  # Still local to your project folder
+        "road_texture": os.path.join(script_dir, "realistic_road.jpg")
     }
     
     input_csv = "results/simulation_telemetry.csv"
     output_blend = "results/animated_sedan.blend"
+    input_csv = os.path.join(script_dir, "results", "simulation_telemetry.csv")
+    output_blend = os.path.join(script_dir, "results", "animated_sedan.blend")
 
     builder = BlenderSceneBuilder(input_csv, output_blend, assets)
     builder.setup_base_scene()

@@ -20,8 +20,47 @@ The normalized Chrono braking input is not hydraulic pressure. It scales the bra
 ## Decoupled Execution Workflow
 
 The simulation uses a data-driven, decoupled architecture. This separates the heavy physics calculations from post-processing and 3D rendering. 
+The simulation uses a data-driven, decoupled architecture. This separates the heavy physics calculations from post-processing and 3D rendering. All necessary vehicle models, mesh assets (`.obj`, `.mtl`), subsystem configurations (`.json`), and tire specifications (`.tir`) are stored locally within the repository under `data/vehicle/sedan/`, making the project fully standalone and portable without relying on external Chrono installation data directories.
 
 Ensure you have installed a PyChrono 10 build with the Vehicle module and configured its data directory.
+### Local Data Directory Structure
+```
+data/
+└── vehicle/
+    └── sedan/
+        ├── Sedan.json
+        ├── sedan_chassis_vis.obj / .mtl
+        ├── sedan_chassis_col.obj
+        ├── sedan_rim.obj / .mtl
+        ├── sedan_tire.obj / .mtl
+        ├── brake/
+        │   ├── Sedan_BrakeShafts.json
+        │   └── Sedan_BrakeSimple.json
+        ├── chassis/
+        │   └── Sedan_Chassis.json
+        ├── driveline/
+        │   └── Sedan_Driveline2WD.json
+        ├── driver/
+        │   └── Sedan_AIDriver.json
+        ├── powertrain/
+        │   ├── Sedan_AutomaticTransmissionSimpleMap.json
+        │   ├── Sedan_EngineShafts.json
+        │   ├── Sedan_EngineSimpleMap.json
+        │   └── Sedan_ManualTransmissionShafts.json
+        ├── steering/
+        │   └── Sedan_RackPinion.json
+        ├── suspension/
+        │   ├── Sedan_DoubleWishbone.json
+        │   └── Sedan_MultiLink.json
+        ├── tire/
+        │   ├── Sedan_Pac02Tire.json / .tir
+        │   ├── Sedan_RigidTire.json
+        │   └── Sedan_TMeasyTire.json
+        ├── vehicle/
+        │   └── Sedan_Vehicle.json
+        └── wheel/
+            └── Sedan_Wheel.json
+```
 
 ### 1. Run the Headless Simulation
 Execute the primary physics script in your standard Python/Conda environment:

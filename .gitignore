@@ -1,2 +1,5 @@
 video_frames/
 results/
+__pycache__/
+temp_render_frames_*/
+

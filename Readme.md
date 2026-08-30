@@ -28,7 +28,6 @@ data/
     └── sedan/
         ├── Sedan.json
         ├── sedan_chassis_vis.obj / .mtl
-        ├── sedan_chassis_col.obj
         ├── sedan_rim.obj / .mtl
         ├── sedan_tire.obj / .mtl
         ├── brake/

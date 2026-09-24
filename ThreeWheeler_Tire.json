@@ -1,9 +1,11 @@
 {
-  "Name": "Rigid contact tire - braking baseline",
-  "Model": "RIGID_CONTACT",
-  "Notes": "Uses Chrono rigid-body cylinder/road contact. It is intended for baseline straight-line braking. Upgrade to TMeasy/Pac02 after validating geometry and brake logic.",
+  "Name": "Compliant contact tire - braking baseline",
+  "Model": "SMC_CONTACT",
+  "Notes": "Uses Chrono compliant cylinder/road contact for a stable straight-line braking baseline. Upgrade to TMeasy/Pac02 for design-quality tire behavior.",
   "Friction_coefficient": 0.90,
   "Restitution": 0.01,
+  "Young_modulus_Pa": 20000000.0,
+  "Poisson_ratio": 0.30,
   "Rolling_friction": 0.002,
   "Spinning_friction": 0.001
 }

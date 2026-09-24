@@ -110,16 +110,16 @@ def _chrono_const_function(value: float):
     return function_cls(float(value))
 
 
-def _chrono_contact_material_nsc():
+def _chrono_contact_material_smc():
     material_cls = getattr(
         chrono,
-        "ChContactMaterialNSC",
-        getattr(chrono, "ChMaterialSurfaceNSC", None),
+        "ChContactMaterialSMC",
+        getattr(chrono, "ChMaterialSurfaceSMC", None),
     )
     if material_cls is None:
         raise AttributeError(
-            "This PyChrono build exposes neither ChContactMaterialNSC "
-            "nor ChMaterialSurfaceNSC."
+            "This PyChrono build exposes neither ChContactMaterialSMC "
+            "nor ChMaterialSurfaceSMC."
         )
     return material_cls()
 
@@ -179,7 +179,9 @@ class ThreeWheelerModel:
     def __init__(self):
         self.cfg = load_all()
 
-        self.system = chrono.ChSystemNSC()
+        self._configure_collision_defaults()
+        self.system = chrono.ChSystemSMC()
+        self._configure_solver()
         gravity = _chrono_vector(
             0.0,
             0.0,
@@ -203,6 +205,50 @@ class ThreeWheelerModel:
         self._make_ground()
         self._make_chassis()
         self._make_wheels()
+
+    def _configure_collision_defaults(self):
+        """Use small, explicit collision tolerances for wheel-road contact."""
+        collision_model = getattr(chrono, "ChCollisionModel", None)
+        if collision_model is None:
+            return
+
+        braking_cfg = self.cfg["braking"]
+        envelope = float(braking_cfg.get("Collision_envelope_m", 0.001))
+        margin = float(braking_cfg.get("Collision_margin_m", 0.001))
+
+        set_envelope = getattr(
+            collision_model,
+            "SetDefaultSuggestedEnvelope",
+            None,
+        )
+        if callable(set_envelope):
+            set_envelope(envelope)
+
+        set_margin = getattr(
+            collision_model,
+            "SetDefaultSuggestedMargin",
+            None,
+        )
+        if callable(set_margin):
+            set_margin(margin)
+
+    def _configure_solver(self):
+        """Configure the iterative solve for the wheel joint constraints."""
+        solver = self.system.GetSolver()
+        as_iterative = getattr(solver, "AsIterative", None)
+        if callable(as_iterative):
+            iterative_solver = as_iterative()
+            if iterative_solver is not None:
+                solver = iterative_solver
+
+        braking_cfg = self.cfg["braking"]
+        set_iterations = getattr(solver, "SetMaxIterations", None)
+        if callable(set_iterations):
+            set_iterations(int(braking_cfg.get("Solver_max_iterations", 200)))
+
+        set_tolerance = getattr(solver, "SetTolerance", None)
+        if callable(set_tolerance):
+            set_tolerance(float(braking_cfg.get("Solver_tolerance", 1.0e-10)))
 
     # ------------------------------------------------------------------
     # Small compatibility helpers
@@ -271,8 +317,8 @@ class ThreeWheelerModel:
     def _make_materials(self):
         tire_cfg = self.cfg["tire"]
 
-        self.road_material = _chrono_contact_material_nsc()
-        self.wheel_material = _chrono_contact_material_nsc()
+        self.road_material = _chrono_contact_material_smc()
+        self.wheel_material = _chrono_contact_material_smc()
 
         for mat in (self.road_material, self.wheel_material):
             mat.SetFriction(
@@ -281,6 +327,16 @@ class ThreeWheelerModel:
             mat.SetRestitution(
                 float(tire_cfg["Restitution"])
             )
+
+            if hasattr(mat, "SetYoungModulus"):
+                mat.SetYoungModulus(
+                    float(tire_cfg.get("Young_modulus_Pa", 2.0e7))
+                )
+
+            if hasattr(mat, "SetPoissonRatio"):
+                mat.SetPoissonRatio(
+                    float(tire_cfg.get("Poisson_ratio", 0.3))
+                )
 
             if hasattr(mat, "SetRollingFriction"):
                 mat.SetRollingFriction(
@@ -551,6 +607,12 @@ class ThreeWheelerModel:
     # ------------------------------------------------------------------
     # State and controls
     # ------------------------------------------------------------------
+    def set_contact_friction(self, coefficient: float):
+        """Set wheel and road friction without rebuilding the contact model."""
+        friction = max(float(coefficient), 0.0)
+        for material in (self.road_material, self.wheel_material):
+            material.SetFriction(friction)
+
     def set_initial_speed(self, speed_mps: float):
         """Initialize the vehicle in approximately pure rolling.
 
@@ -573,6 +635,10 @@ class ThreeWheelerModel:
         self._set_lin_vel(
             self.chassis,
             vehicle_velocity,
+        )
+        self._set_ang_vel_local(
+            self.chassis,
+            _chrono_vector(0.0, 0.0, 0.0),
         )
 
         # Wheel translational and angular velocities.

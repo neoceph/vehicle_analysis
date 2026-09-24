@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 import pandas as pd
@@ -43,6 +44,7 @@ class BrakingSimulation:
         self.step_size = float(self.cfg["Step_size_s"])
         self.max_time = float(self.cfg["Maximum_simulation_time_s"])
         self.output_hz = float(self.cfg["Output_frequency_hz"])
+        self.settle_time = max(float(self.cfg.get("Initial_settle_time_s", 0.0)), 0.0)
         self.brake_start = float(self.cfg["Brake_start_time_s"])
         self.brake_ramp = max(float(self.cfg["Brake_ramp_time_s"]), 1e-9)
         self.stop_speed = float(self.cfg["Stop_speed_mps"])
@@ -52,7 +54,22 @@ class BrakingSimulation:
         self.stop_time: float | None = None
         self.stop_x: float | None = None
 
+        self._settle_model()
         self.model.set_initial_speed(self.target_speed)
+        self.test_start_system_time = self.model.get_time()
+
+    def _settle_model(self):
+        """Resolve gravity and wheel-road contacts before the braking test."""
+        road_friction = float(self.model.cfg["tire"]["Friction_coefficient"])
+        self.model.set_contact_friction(0.0)
+        self.model.set_brake_input(0.0)
+        settle_steps = math.ceil(self.settle_time / self.step_size)
+        for _ in range(settle_steps):
+            self.model.advance(self.step_size)
+        self.model.set_contact_friction(road_friction)
+
+    def _test_time(self) -> float:
+        return self.model.get_time() - self.test_start_system_time
 
     def _brake_input(self, time_s: float) -> float:
         if time_s < self.brake_start:
@@ -66,7 +83,7 @@ class BrakingSimulation:
         pos = _call_method(chassis, "GetPos")
         rot = _call_method(chassis, "GetRot")
         speed = self.model.get_forward_speed()
-        time_s = self.model.get_time()
+        time_s = self._test_time()
 
         frame: dict[str, Any] = {
             "time": time_s,
@@ -121,15 +138,16 @@ class BrakingSimulation:
     def run(self):
         last_sample_time = -1.0e9
         print("Starting three-wheeler headless braking simulation...")
+        print(f"Stationary contact settling: {self.settle_time:.3f} s")
         print(f"Initial speed: {self.target_speed * 3.6:.1f} km/h")
         print(f"Total modeled mass: {self.model.total_mass():.1f} kg")
 
-        while self.model.get_time() < self.max_time:
-            time_s = self.model.get_time()
+        while self._test_time() < self.max_time:
+            time_s = self._test_time()
             speed = self.model.get_forward_speed()
             brake_input = self._brake_input(time_s)
 
-            if brake_input > 0.0 and self.braking_start_time is None:
+            if time_s >= self.brake_start and self.braking_start_time is None:
                 self.braking_start_time = time_s
                 self.braking_start_x = _component(
                     _call_method(self.model.chassis, "GetPos"),

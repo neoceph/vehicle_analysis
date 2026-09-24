@@ -104,7 +104,7 @@ class BrakingSimulation:
             w_pos = _call_method(wheel, "GetPos")
             w_rot = _call_method(wheel, "GetRot")
             w_ang = _call_method(wheel, "GetAngVelParent")
-            contact = _call_method(wheel, "GetContactForce")
+            road_force = self.model.get_wheel_road_force(name)
 
             try:
                 brake_torque = float(
@@ -127,9 +127,16 @@ class BrakingSimulation:
                     f"{name}_qz": _component(w_rot, "e3"),
                     f"{name}_omega_y": _component(w_ang, "y"),
                     f"{name}_brake_torque_Nm": brake_torque,
-                    f"{name}_contact_Fx_N": _component(contact, "x"),
-                    f"{name}_contact_Fy_N": _component(contact, "y"),
-                    f"{name}_contact_Fz_N": _component(contact, "z"),
+                    f"{name}_contact_Fx_N": road_force[0],
+                    f"{name}_contact_Fy_N": road_force[1],
+                    f"{name}_contact_Fz_N": road_force[2],
+                    f"{name}_longitudinal_slip": (
+                        assembly.last_longitudinal_slip
+                    ),
+                    f"{name}_lateral_slip": assembly.last_lateral_slip,
+                    f"{name}_tire_deflection_m": (
+                        assembly.last_tire_deflection_m
+                    ),
                 }
             )
 

@@ -12,7 +12,7 @@ It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheel
 - `ThreeWheeler_RearSuspension.json` — rear axle position and track width; baseline is rigid.
 - `ThreeWheeler_FrontWheel.json` — front wheel dimensions/inertia/brake torque.
 - `ThreeWheeler_RearWheel.json` — rear wheel dimensions/inertia/brake torque.
-- `ThreeWheeler_Tire.json` — compliant-contact tire/road properties.
+- `ThreeWheeler_Tire.json` — TMeasy tire/road force and vertical compliance properties.
 - `Braking_Config.json` — target speed, timestep, brake timing, road dimensions.
 
 The JSON files are **project parameter files consumed by the Python code**, not stock Chrono::Vehicle subsystem JSON schemas.
@@ -39,6 +39,8 @@ Before treating results as design-quality values, replace the baseline numbers w
 5. front/rear maximum brake torque;
 6. tire-road friction.
 
-## Why compliant contact with rigid suspension first?
+## Tire model
 
-This version is intended to validate the three-wheeler topology and braking logic. The wheel centers remain rigidly attached to the chassis, while SMC cylinder/road contact supplies enough normal compliance to avoid unstable cold-start contact impulses. After this baseline is verified, the next upgrade should replace the contact cylinders with a handling tire model (for example TMeasy or Pac02) and then add front-fork/rear-suspension compliance if suspension dynamics are part of the study.
+This version uses a local TMeasy-style force element for the custom 1-front + 2-rear topology. Wheel cylinders remain for visualization, but their tire-road collision is disabled when `ThreeWheeler_Tire.json` has `"Model": "TMEASY"`. The TMeasy force element supplies vertical tire compliance, longitudinal braking force, lateral force, and rolling resistance.
+
+The wheel centers are still rigidly attached to the chassis. Add front-fork/rear-suspension compliance separately if suspension dynamics are part of the study.

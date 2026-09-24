@@ -3,7 +3,7 @@
   "Initial_settle_time_s": 0.50,
   "Brake_start_time_s": 0.0,
   "Brake_ramp_time_s": 0.20,
-  "Stop_speed_mps": 0.01,
+  "Stop_speed_mps": 0.15,
   "Maximum_simulation_time_s": 15.0,
   "Step_size_s": 0.001,
   "Output_frequency_hz": 200.0,

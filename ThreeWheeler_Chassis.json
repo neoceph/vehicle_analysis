@@ -1,0 +1,10 @@
+{
+  "Name": "ThreeWheeler Chassis - braking baseline",
+  "Notes": "Custom parameter file consumed by ThreeWheeler.py; this is not a stock Chrono::Vehicle JSON schema.",
+  "Mass_kg": 600.0,
+  "COM_from_rear_axle_m": [0.90, 0.0, 0.55],
+  "Inertia_kg_m2": [180.0, 520.0, 600.0],
+  "Visualization_box_m": [2.40, 1.35, 0.32],
+  "Initial_yaw_deg": 0.0,
+  "Collision_enabled": false
+}

@@ -1,0 +1,9 @@
+{
+  "Name": "ThreeWheeler Rear Suspension - rigid braking baseline",
+  "Notes": "Rigid wheel-center locations are used for the first straight-line braking model. Replace with compliant suspension after baseline validation.",
+  "Model": "RIGID",
+  "Rear_axle_x_m": 0.0,
+  "Rear_track_m": 1.30,
+  "Rear_camber_deg": 0.0,
+  "Rear_toe_deg": 0.0
+}

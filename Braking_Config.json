@@ -1,0 +1,14 @@
+{
+  "Target_speed_kph": 100.0,
+  "Brake_start_time_s": 0.50,
+  "Brake_ramp_time_s": 0.20,
+  "Stop_speed_mps": 0.10,
+  "Maximum_simulation_time_s": 15.0,
+  "Step_size_s": 0.001,
+  "Output_frequency_hz": 200.0,
+  "Road_length_m": 1000.0,
+  "Road_width_m": 20.0,
+  "Road_thickness_m": 0.20,
+  "Gravity_mps2": 9.81,
+  "Initial_lane_y_m": 0.0
+}

@@ -1,0 +1,11 @@
+{
+  "Name": "Front center wheel",
+  "Wheelbase_m": 2.20,
+  "Lateral_offset_m": 0.0,
+  "Radius_m": 0.31,
+  "Width_m": 0.145,
+  "Mass_kg": 14.0,
+  "Inertia_kg_m2": [0.35, 0.67, 0.35],
+  "Steering_angle_deg": 0.0,
+  "Brake_max_torque_Nm": 950.0
+}

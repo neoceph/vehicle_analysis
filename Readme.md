@@ -1,92 +1,44 @@
-# Project Chrono straight-line braking workflow
+# Three-wheeler Chrono braking baseline
 
-This baseline is a repeatable **100-to-0 km/h Sedan full-brake stop** on flat, high-friction pavement. It uses Chrono's packaged Sedan with TMeasy tires and automatically produces a graph from which stopping time and stopping distance can be read directly.
+This project is a straight-line **1 front + 2 rear** three-wheeler braking model for PyChrono.
+It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheeled-vehicle axle/suspension abstraction assumes left/right wheel pairs.
 
-## Representative setup
+## Files
 
-| Item | Baseline value | Why it matters |
-|---|---:|---|
-| Vehicle | `Sedan` | Packaged representative passenger-car model |
-| Driveline | Sedan default | Model-defined passenger-car driveline |
-| Tire | TMeasy | Captures longitudinal slip/load behavior; better for braking than rigid tires |
-| Road | Rigid, flat, `mu = 0.90` | Dry-asphalt-like baseline |
-| Initial test speed | 100 km/h | Standard, readily interpreted test condition |
-| Brake rise time | 0.25 s | Avoids a numerically abrupt step and represents pedal/application buildup |
-| Brake demand | 1.0 normalized | Maximum model brake torque |
-| MBS/tire steps | 2 ms / 1 ms | Practical starting point; verify by time-step convergence |
+- `ThreeWheeler.py` — constructs the custom three-wheel multibody topology.
+- `simulation.py` — initializes the vehicle at the target speed, ramps the brakes, logs telemetry, and writes the braking summary.
+- `analyze_braking.py` — generates braking plots from the CSV.
+- `ThreeWheeler_Chassis.json` — mass, inertia, COM, and simple visualization dimensions.
+- `ThreeWheeler_RearSuspension.json` — rear axle position and track width; baseline is rigid.
+- `ThreeWheeler_FrontWheel.json` — front wheel dimensions/inertia/brake torque.
+- `ThreeWheeler_RearWheel.json` — rear wheel dimensions/inertia/brake torque.
+- `ThreeWheeler_Tire.json` — rigid-contact tire/road friction properties.
+- `Braking_Config.json` — target speed, timestep, brake timing, road dimensions.
 
-The normalized Chrono braking input is not hydraulic pressure. It scales the brake subsystem's available torque. To match a real vehicle, replace the packaged brake parameters with measured maximum axle brake torques, balance, and actuation dynamics.
+The JSON files are **project parameter files consumed by the Python code**, not stock Chrono::Vehicle subsystem JSON schemas.
 
-## Decoupled Execution Workflow
+## Run
 
-The simulation uses a data-driven, decoupled architecture. This separates the heavy physics calculations from post-processing and 3D rendering. 
-
-Ensure you have installed a PyChrono 10 build with the Vehicle module and configured its data directory.
-
-### 1. Run the Headless Simulation
-Execute the primary physics script in your standard Python/Conda environment:
+From this directory:
 
 ```bash
 python simulation.py
+python analyze_braking.py
 ```
 
-Expected Output: The script will create a `results/ directory` containing `simulation_telemetry.csv`.
+Outputs are written to `results/`.
 
-### Stage 2: Data Analysis & Graphing (On-Demand)
-This script loads the telemetry artifact to generate analysis graphs on-demand without recalculating the physics.
+## Important calibration parameters
 
-In the same terminal, run the following command:
-```bash
-python graph_generation.py
-```
+Before treating results as design-quality values, replace the baseline numbers with your CAD/measured values:
 
-Expected Output: The script will save `braking_performance.png` inside the `results/ folder`, clearly annotated with the final stopping time and distance.
+1. chassis mass and inertia;
+2. chassis COM relative to the rear axle;
+3. wheelbase and rear track;
+4. front/rear wheel radius and inertia;
+5. front/rear maximum brake torque;
+6. tire-road friction.
 
-### Stage 3: Blender 3D Animation Generation
-This script creates a `.blend` file completely from scratch. It builds placeholder 3D geometry for the chassis and wheels, reads the `simulation_telemetry.csv`, and inserts precise location and rotation keyframes.
+## Why rigid tires/suspension first?
 
-This script requires the bpy module and uses Blender's background executable to generate a series of temporary .png and then .mp4.
-
-You can install bpy modules using the command `pip install bpy`.
-
-```bash
-python blender_export.py
-```
-
-Expected Output: The terminal will output SUCCESS! Blender file generated, and an `animated_sedan.blend` file will appear in your results/ folder.
-
-### Stage 4: Render the animation using Blender
-Use the script `render_blender.py` to generate the `.png` sequence and `.mp4` files of the animation of the simulation as a video. This workflow could be improved and video file could be directly generated but requires further tweaking with bpy. For now, in the interest of time, video is generated through image sequence.
-
-```bash
-python render_blender.py
-```
-
-### General Workflow Principles
-
-1. **Define the maneuver:** Set target speed, road friction, brake rise time, and stop threshold. Keep steering at zero.
-
-2. **Assemble the plant:** Select the vehicle, powertrain, driveline, brake, and tire models.
-
-3. **Create the environment:** Use a long rigid patch first. Later vary friction, grade, split-mu, and surface compliance.
-
-4. **Condition the vehicle:** Accelerate to 100 km/h. At the target-speed crossing, release the throttle and begin the prescribed brake ramp.
-
-5. **Apply brakes:** Ramp normalized braking from 0 to 1.
-
-6. **Synchronize and advance:** At every step call terrain synchronization, vehicle synchronization with driver inputs, then advance both modules.
-
-7. **Log responses:** Record time, longitudinal position/speed/acceleration, pitch, brake demand, wheel angular speeds, and tire forces.
-
-8. **Calculate metrics:** Measure from the start of brake application to find stopping time/distance and mean/peak deceleration.
-
-9. **Verify numerics:** Repeat at 2, 1, and 0.5 ms. Stopping distance should converge.
-
-10. **Validate the model:** Compare against track data using the same speed, payload, tire pressure, and road friction.
-
-## Sources
-
-- [Project Chrono vehicle overview](https://api.projectchrono.org/vehicle_overview.html)
-- [Project Chrono driver subsystem](https://api.projectchrono.org/vehicle_driver.html)
-- [Official vehicle models reference](https://api.projectchrono.org/vehicle_models.html)
-- [Chrono 10 Sedan class reference](https://api.projectchrono.org/10.0.0/classchrono_1_1vehicle_1_1sedan_1_1_sedan.html)
+This version is intended to validate the three-wheeler topology and braking logic. Rigid cylinder contact gives direct Coulomb road contact and supports wheel lock and load transfer. After this baseline is verified, the next upgrade should replace the rigid-contact tires with a handling tire model (for example TMeasy or Pac02) and then add front-fork/rear-suspension compliance if suspension dynamics are part of the study.

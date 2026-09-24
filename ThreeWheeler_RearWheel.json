@@ -1,0 +1,8 @@
+{
+  "Name": "Rear wheel pair",
+  "Radius_m": 0.31,
+  "Width_m": 0.165,
+  "Mass_each_kg": 14.0,
+  "Inertia_each_kg_m2": [0.36, 0.67, 0.36],
+  "Brake_max_torque_each_Nm": 350.0
+}

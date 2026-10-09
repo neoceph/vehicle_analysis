@@ -9,7 +9,7 @@ try:
 except ImportError:
     import pychrono as chrono
 
-from config import load_all
+from config import load_all, load_json
 
 
 def _chrono_vector(x: float, y: float, z: float):
@@ -110,6 +110,22 @@ def _chrono_const_function(value: float):
     return function_cls(float(value))
 
 
+def _chrono_setpoint_function(value: float, time_s: float):
+    function_cls = getattr(
+        chrono,
+        "ChFunctionSetpoint",
+        getattr(chrono, "ChFunction_Setpoint", None),
+    )
+    if function_cls is None:
+        raise AttributeError(
+            "This PyChrono build exposes neither ChFunctionSetpoint "
+            "nor ChFunction_Setpoint."
+        )
+    function = function_cls()
+    function.SetSetpoint(float(value), float(time_s))
+    return function
+
+
 def _chrono_contact_material_smc():
     material_cls = getattr(
         chrono,
@@ -159,16 +175,23 @@ class WheelAssembly:
     radius: float
     max_brake_torque: float
     force_accumulator: int | None = None
+    # Body whose local X axis is the wheel heading; None means the chassis.
+    steering_body: object | None = None
+    drive_torque_Nm: float = 0.0
+    brake_torque_Nm: float = 0.0
     last_tire_force_N: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    # (longitudinal, lateral, vertical) force in the wheel heading frame.
+    last_tire_force_wheel_N: tuple[float, float, float] = (0.0, 0.0, 0.0)
     last_tire_moment_Nm: tuple[float, float, float] = (0.0, 0.0, 0.0)
     last_longitudinal_slip: float = 0.0
     last_lateral_slip: float = 0.0
+    last_slip_angle_rad: float = 0.0
     last_tire_deflection_m: float = 0.0
     last_normal_force_N: float = 0.0
 
 
 class ThreeWheelerModel:
-    """Straight-line reverse-trike model for braking studies.
+    """Reverse-trike (delta) model for braking and cornering studies.
 
     Coordinate convention:
         +X forward, +Y left, +Z up.
@@ -178,13 +201,33 @@ class ThreeWheelerModel:
 
     Baseline assumptions:
         - rigid wheel-center locations
-        - front steering fixed at zero
+        - front steering fixed at zero, unless ``enable_steering`` is set:
+          the front wheel then spins on a steering knuckle that an angle
+          motor turns about the vertical axis through the wheel center
+          (no caster, trail, or scrub radius)
         - TMeasy tire forces or fallback rigid wheel/road contact
-        - braking torque applied through ChLinkMotorRotationTorque
+        - drive and braking torque applied through ChLinkMotorRotationTorque
+
+    ``scenario_config`` names the test JSON that supplies gravity, solver,
+    collision, road, and lane settings (default: Braking_Config.json).
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        enable_steering: bool = False,
+        scenario_config: str | None = None,
+    ):
         self.cfg = load_all()
+        self.scenario_cfg = (
+            self.cfg["braking"]
+            if scenario_config is None
+            else load_json(scenario_config)
+        )
+        self.enable_steering = bool(enable_steering)
+        self.steering_knuckle = None
+        self.knuckle_force_accumulator = None
+        self.steering_motor = None
+        self.steering_function = None
         self.tire_model = str(
             self.cfg["tire"].get("Model", "SMC_CONTACT")
         ).strip().upper()
@@ -203,7 +246,7 @@ class ThreeWheelerModel:
         gravity = _chrono_vector(
             0.0,
             0.0,
-            -float(self.cfg["braking"]["Gravity_mps2"]),
+            -float(self.scenario_cfg["Gravity_mps2"]),
         )
         _call_first_method(
             self.system,
@@ -230,9 +273,9 @@ class ThreeWheelerModel:
         if collision_model is None:
             return
 
-        braking_cfg = self.cfg["braking"]
-        envelope = float(braking_cfg.get("Collision_envelope_m", 0.001))
-        margin = float(braking_cfg.get("Collision_margin_m", 0.001))
+        scenario_cfg = self.scenario_cfg
+        envelope = float(scenario_cfg.get("Collision_envelope_m", 0.001))
+        margin = float(scenario_cfg.get("Collision_margin_m", 0.001))
 
         set_envelope = getattr(
             collision_model,
@@ -259,14 +302,14 @@ class ThreeWheelerModel:
             if iterative_solver is not None:
                 solver = iterative_solver
 
-        braking_cfg = self.cfg["braking"]
+        scenario_cfg = self.scenario_cfg
         set_iterations = getattr(solver, "SetMaxIterations", None)
         if callable(set_iterations):
-            set_iterations(int(braking_cfg.get("Solver_max_iterations", 200)))
+            set_iterations(int(scenario_cfg.get("Solver_max_iterations", 200)))
 
         set_tolerance = getattr(solver, "SetTolerance", None)
         if callable(set_tolerance):
-            set_tolerance(float(braking_cfg.get("Solver_tolerance", 1.0e-10)))
+            set_tolerance(float(scenario_cfg.get("Solver_tolerance", 1.0e-10)))
 
     # ------------------------------------------------------------------
     # Small compatibility helpers
@@ -447,11 +490,12 @@ class ThreeWheelerModel:
                 return
 
     def _make_ground(self):
-        bcfg = self.cfg["braking"]
+        bcfg = self.scenario_cfg
 
         length = float(bcfg["Road_length_m"])
         width = float(bcfg["Road_width_m"])
         thickness = float(bcfg["Road_thickness_m"])
+        start_x = float(bcfg.get("Road_start_x_m", -20.0))
 
         self.ground = chrono.ChBodyEasyBox(
             length,
@@ -466,7 +510,7 @@ class ThreeWheelerModel:
         self.ground.SetName("Road")
         self.ground.SetPos(
             _chrono_vector(
-                length / 2.0 - 20.0,
+                start_x + length / 2.0,
                 0.0,
                 -thickness / 2.0,
             )
@@ -481,7 +525,7 @@ class ThreeWheelerModel:
         dims = ccfg["Visualization_box_m"]
         com = ccfg["COM_from_rear_axle_m"]
         lane_y = float(
-            self.cfg["braking"]["Initial_lane_y_m"]
+            self.scenario_cfg["Initial_lane_y_m"]
         )
 
         self.chassis = chrono.ChBodyEasyBox(
@@ -525,6 +569,10 @@ class ThreeWheelerModel:
             )
 
         self.system.AddBody(self.chassis)
+        # Receives the tire moments carried by the rear wheel bearings.
+        self.chassis_force_accumulator = self._add_force_accumulator(
+            self.chassis
+        )
 
     def _new_wheel(
         self,
@@ -535,8 +583,16 @@ class ThreeWheelerModel:
         mass: float,
         inertia,
         max_brake_torque: float,
+        carrier=None,
     ) -> WheelAssembly:
-        """Create one rigid wheel and its brake torque motor."""
+        """Create one rigid wheel and its drive/brake torque motor.
+
+        The wheel spins relative to ``carrier`` (the chassis by default, or
+        the steering knuckle for a steered wheel).
+        """
+
+        if carrier is None:
+            carrier = self.chassis
 
         # Cylinder axis is local Y, which is the wheel spin axis.
         wheel = _chrono_easy_cylinder(
@@ -588,7 +644,7 @@ class ThreeWheelerModel:
 
         brake_motor.Initialize(
             wheel,
-            self.chassis,
+            carrier,
             motor_frame,
         )
 
@@ -611,7 +667,76 @@ class ThreeWheelerModel:
             radius=float(radius),
             max_brake_torque=float(max_brake_torque),
             force_accumulator=force_accumulator,
+            steering_body=None if carrier is self.chassis else carrier,
         )
+
+    def _make_steering_knuckle(self, position):
+        """Create the front steering knuckle and its steering angle motor.
+
+        The knuckle sits at the front wheel center.  An angle motor turns it
+        relative to the chassis about the chassis-vertical axis through that
+        point; positive angles steer left.
+        """
+        fcfg = self.cfg["front_wheel"]
+        knuckle_mass = float(fcfg.get("Steering_knuckle_mass_kg", 1.0))
+        inertia = fcfg.get(
+            "Steering_knuckle_inertia_kg_m2",
+            [0.02, 0.02, 0.02],
+        )
+        if not 0.0 < knuckle_mass < float(fcfg["Mass_kg"]):
+            raise ValueError(
+                "Steering_knuckle_mass_kg must be positive and smaller than "
+                "the front wheel Mass_kg it is taken from."
+            )
+
+        knuckle = chrono.ChBody()
+        knuckle.SetName("Steering_Knuckle")
+        knuckle.SetMass(knuckle_mass)
+        knuckle.SetInertiaXX(
+            _chrono_vector(
+                float(inertia[0]),
+                float(inertia[1]),
+                float(inertia[2]),
+            )
+        )
+        knuckle.SetPos(
+            _chrono_vector(
+                float(position[0]),
+                float(position[1]),
+                float(position[2]),
+            )
+        )
+        self.system.AddBody(knuckle)
+        self.knuckle_force_accumulator = self._add_force_accumulator(knuckle)
+
+        # ChLinkMotorRotationAngle rotates about its frame Z axis, which is
+        # left unrotated here so that it is the chassis vertical axis.
+        steering_motor = chrono.ChLinkMotorRotationAngle()
+        steering_motor.Initialize(
+            knuckle,
+            self.chassis,
+            _chrono_frame(
+                _chrono_vector(
+                    float(position[0]),
+                    float(position[1]),
+                    float(position[2]),
+                )
+            ),
+        )
+        steering_motor.SetName("Steering")
+
+        steering_function = _chrono_setpoint_function(0.0, self.get_time())
+        _call_first_method(
+            steering_motor,
+            ("SetAngleFunction", "SetMotorFunction"),
+            steering_function,
+        )
+        self.system.AddLink(steering_motor)
+
+        self.steering_knuckle = knuckle
+        self.steering_motor = steering_motor
+        self.steering_function = steering_function
+        return knuckle
 
     def _make_wheels(self):
         fcfg = self.cfg["front_wheel"]
@@ -619,7 +744,7 @@ class ThreeWheelerModel:
         scfg = self.cfg["rear_suspension"]
 
         lane_y = float(
-            self.cfg["braking"]["Initial_lane_y_m"]
+            self.scenario_cfg["Initial_lane_y_m"]
         )
 
         front_r = float(
@@ -642,27 +767,39 @@ class ThreeWheelerModel:
 
         self.wheels: Dict[str, WheelAssembly] = {}
 
+        front_position = (
+            front_x,
+            lane_y + float(
+                fcfg["Lateral_offset_m"]
+            ),
+            front_r,
+        )
+        front_mass = float(
+            fcfg["Mass_kg"]
+        )
+        front_carrier = None
+        if self.enable_steering:
+            # The knuckle mass is taken from the front wheel mass so that
+            # the vehicle mass and center of gravity stay as configured.
+            front_carrier = self._make_steering_knuckle(front_position)
+            front_mass -= float(
+                _call_first_method(front_carrier, ("GetMass",))
+            )
+
         # Front center wheel
         self.wheels["Wheel_F"] = self._new_wheel(
             name="Wheel_F",
-            position=(
-                front_x,
-                lane_y + float(
-                    fcfg["Lateral_offset_m"]
-                ),
-                front_r,
-            ),
+            position=front_position,
             radius=front_r,
             width=float(
                 fcfg["Width_m"]
             ),
-            mass=float(
-                fcfg["Mass_kg"]
-            ),
+            mass=front_mass,
             inertia=fcfg["Inertia_kg_m2"],
             max_brake_torque=float(
                 fcfg["Brake_max_torque_Nm"]
             ),
+            carrier=front_carrier,
         )
 
         # Rear-left wheel
@@ -745,6 +882,16 @@ class ThreeWheelerModel:
             _chrono_vector(0.0, 0.0, 0.0),
         )
 
+        if self.steering_knuckle is not None:
+            self._set_lin_vel(
+                self.steering_knuckle,
+                vehicle_velocity,
+            )
+            self._set_ang_vel_local(
+                self.steering_knuckle,
+                _chrono_vector(0.0, 0.0, 0.0),
+            )
+
         # Wheel translational and angular velocities.
         for assembly in self.wheels.values():
             wheel = assembly.body
@@ -825,12 +972,77 @@ class ThreeWheelerModel:
                     omega,
                 )
 
-            # ChFunctionConst API differs slightly across some builds.
-            _call_first_method(
-                assembly.brake_function,
-                ("SetConstant", "SetValue"),
-                torque,
+            assembly.brake_torque_Nm = torque
+            self._apply_wheel_torque(assembly)
+
+    def set_drive_torque(
+        self,
+        torque_Nm: float,
+        wheel_names=("Wheel_RL", "Wheel_RR"),
+    ):
+        """Split a total drive torque equally over the driven wheels.
+
+        An equal split is the torque balance of an open differential.
+        Positive torque drives the vehicle forward; negative torque is
+        engine braking.  Wheels not listed receive no drive torque.
+        """
+        driven = tuple(wheel_names)
+        unknown = [name for name in driven if name not in self.wheels]
+        if not driven or unknown:
+            raise ValueError(
+                f"Drive wheels must be a non-empty subset of "
+                f"{list(self.wheels)}; got {list(driven)}."
             )
+
+        share = float(torque_Nm) / len(driven)
+        for name, assembly in self.wheels.items():
+            assembly.drive_torque_Nm = share if name in driven else 0.0
+            self._apply_wheel_torque(assembly)
+
+    def _apply_wheel_torque(self, assembly: WheelAssembly):
+        # ChFunctionConst API differs slightly across some builds.
+        _call_first_method(
+            assembly.brake_function,
+            ("SetConstant", "SetValue"),
+            assembly.drive_torque_Nm + assembly.brake_torque_Nm,
+        )
+
+    def set_steering_angle(self, angle_rad: float):
+        """Command the front-wheel steer angle in radians (positive = left).
+
+        The command is clamped to +/- Max_steering_angle_deg from the front
+        wheel JSON and reached by the steering motor at the end of the next
+        step.
+        """
+        if self.steering_function is None:
+            raise RuntimeError(
+                "Steering is disabled; build the model with "
+                "ThreeWheelerModel(enable_steering=True)."
+            )
+
+        limit = math.radians(
+            float(
+                self.cfg["front_wheel"].get("Max_steering_angle_deg", 45.0)
+            )
+        )
+        angle = max(-limit, min(limit, float(angle_rad)))
+        self.steering_function.SetSetpoint(angle, self.get_time())
+
+    def get_steering_angle(self) -> float:
+        """Return the actual front-wheel steer angle in radians."""
+        if self.steering_motor is None:
+            return 0.0
+        return float(
+            _call_first_method(self.steering_motor, ("GetMotorAngle",))
+        )
+
+    def get_steering_torque(self) -> float:
+        """Return the torque the steering motor applies about its axis."""
+        if self.steering_motor is None:
+            return 0.0
+        return float(
+            _call_first_method(self.steering_motor, ("GetMotorTorque",))
+        )
 
     # ------------------------------------------------------------------
     # Simulation helpers
@@ -859,26 +1071,28 @@ class ThreeWheelerModel:
             self.system.GetChTime()
         )
 
-    def total_mass(self) -> float:
-        wheel_mass = sum(
-            float(
-                _call_first_method(
-                    assembly.body,
-                    ("GetMass",),
-                )
-            )
+    def vehicle_bodies(self) -> list:
+        """Return every moving body of the vehicle (chassis first)."""
+        bodies = [self.chassis]
+        if self.steering_knuckle is not None:
+            bodies.append(self.steering_knuckle)
+        bodies.extend(
+            assembly.body
             for assembly
             in self.wheels.values()
         )
+        return bodies
 
-        return (
+    def total_mass(self) -> float:
+        return sum(
             float(
                 _call_first_method(
-                    self.chassis,
+                    body,
                     ("GetMass",),
                 )
             )
-            + wheel_mass
+            for body
+            in self.vehicle_bodies()
         )
 
     # ------------------------------------------------------------------
@@ -949,8 +1163,14 @@ class ThreeWheelerModel:
             * (3.0 - 2.0 * normalized_slip)
         )
 
-    def _horizontal_tire_axes(self):
-        forward = self.chassis.TransformDirectionLocalToParent(
+    def _horizontal_tire_axes(self, body=None):
+        """Return horizontal (forward, left) unit axes of a heading body.
+
+        The chassis is used unless ``body`` (e.g. a steering knuckle) is
+        given.
+        """
+        reference = self.chassis if body is None else body
+        forward = reference.TransformDirectionLocalToParent(
             _chrono_vector(1.0, 0.0, 0.0)
         )
         forward_x = _component(forward, "x")
@@ -1067,9 +1287,31 @@ class ThreeWheelerModel:
         rolling_resistance = float(
             tire_cfg.get("Rolling_resistance_coefficient", 0.0)
         )
-        x_axis, y_axis = self._horizontal_tire_axes()
+        chassis_axes = self._horizontal_tire_axes()
+        self._empty_force_accumulator(
+            self.chassis,
+            self.chassis_force_accumulator,
+        )
+        if self.steering_knuckle is not None:
+            self._empty_force_accumulator(
+                self.steering_knuckle,
+                self.knuckle_force_accumulator,
+            )
 
         for assembly in self.wheels.values():
+            # A steered wheel slips and generates force in its own heading
+            # frame; unsteered wheels share the chassis heading.  The carrier
+            # is the non-spinning body the wheel bearing is mounted on.
+            if assembly.steering_body is None:
+                x_axis, y_axis = chassis_axes
+                carrier = self.chassis
+                carrier_accumulator = self.chassis_force_accumulator
+            else:
+                x_axis, y_axis = self._horizontal_tire_axes(
+                    assembly.steering_body
+                )
+                carrier = assembly.steering_body
+                carrier_accumulator = self.knuckle_force_accumulator
             wheel = assembly.body
             self._empty_force_accumulator(
                 wheel,
@@ -1098,9 +1340,11 @@ class ThreeWheelerModel:
 
             if depth <= 0.0 or normal_force <= 0.0:
                 assembly.last_tire_force_N = (0.0, 0.0, 0.0)
+                assembly.last_tire_force_wheel_N = (0.0, 0.0, 0.0)
                 assembly.last_tire_moment_Nm = (0.0, 0.0, 0.0)
                 assembly.last_longitudinal_slip = 0.0
                 assembly.last_lateral_slip = 0.0
+                assembly.last_slip_angle_rad = 0.0
                 assembly.last_tire_deflection_m = depth
                 assembly.last_normal_force_N = 0.0
                 continue
@@ -1172,21 +1416,41 @@ class ThreeWheelerModel:
                 fx = 0.0
                 fy = 0.0
 
+            force_x = fx * x_axis[0] + fy * y_axis[0]
+            force_y = fx * x_axis[1] + fy * y_axis[1]
             force_parent = _chrono_vector(
-                fx * x_axis[0] + fy * y_axis[0],
-                fx * x_axis[1] + fy * y_axis[1],
+                force_x,
+                force_y,
                 normal_force,
             )
-            contact_point = _chrono_vector(
-                _component(pos, "x"),
-                _component(pos, "y"),
-                road_z,
+
+            # The force acts at the contact point below the wheel center.
+            # Apply it at the center plus its moment about the center, split
+            # into the spin-axis part (drives or brakes the wheel) and the
+            # rest, which the bearing carries anyway.  Putting that rest on
+            # the non-spinning carrier avoids the error of a moment held in
+            # the spinning wheel frame over a step: a spurious vertical
+            # torque of about lever * Fy * omega * step_size.
+            lever_z = road_z - center_z
+            moment = (-lever_z * force_y, lever_z * force_x, 0.0)
+            spin_axis = wheel.TransformDirectionLocalToParent(
+                _chrono_vector(0.0, 1.0, 0.0)
             )
+            spin_axis = (
+                _component(spin_axis, "x"),
+                _component(spin_axis, "y"),
+                _component(spin_axis, "z"),
+            )
+            spin_moment = sum(m * s for m, s in zip(moment, spin_axis))
+            bearing_moment = _chrono_vector(
+                *(m - spin_moment * s for m, s in zip(moment, spin_axis))
+            )
+
             self._accumulate_force(
                 wheel,
                 assembly.force_accumulator,
                 force_parent,
-                contact_point,
+                pos,
                 False,
             )
 
@@ -1194,7 +1458,7 @@ class ThreeWheelerModel:
             rolling_torque *= math.tanh(omega_y)
             local_moment = _chrono_vector(
                 0.0,
-                rolling_torque,
+                rolling_torque + spin_moment,
                 0.0,
             )
             self._accumulate_torque(
@@ -1203,12 +1467,19 @@ class ThreeWheelerModel:
                 local_moment,
                 True,
             )
+            self._accumulate_torque(
+                carrier,
+                carrier_accumulator,
+                bearing_moment,
+                False,
+            )
 
             assembly.last_tire_force_N = (
                 _component(force_parent, "x"),
                 _component(force_parent, "y"),
                 _component(force_parent, "z"),
             )
+            assembly.last_tire_force_wheel_N = (fx, fy, normal_force)
             assembly.last_tire_moment_Nm = (
                 0.0,
                 rolling_torque,
@@ -1216,6 +1487,12 @@ class ThreeWheelerModel:
             )
             assembly.last_longitudinal_slip = sx
             assembly.last_lateral_slip = sy
+            # Slip angle alpha, positive when it produces a +Y (left) force.
+            assembly.last_slip_angle_rad = (
+                math.atan2(-vy, abs(vx))
+                if math.hypot(vx, vy) > 0.1
+                else 0.0
+            )
             assembly.last_tire_deflection_m = depth
             assembly.last_normal_force_N = normal_force
 
@@ -1230,3 +1507,25 @@ class ThreeWheelerModel:
             _component(contact, "y"),
             _component(contact, "z"),
         )
+
+    def tire_cornering_stiffness(self, normal_force_N: float) -> float:
+        """Small-slip lateral stiffness dFy/d(alpha) [N/rad] of one tire.
+
+        Matches _tmeasy_curve, which raises the configured initial slope to
+        2 * peak_force / peak_slip when it is too low for the curve to peak.
+        Friction scaling cancels in that ratio.
+        """
+        tire_cfg = self.cfg["tire"]
+        maximum_load = float(
+            tire_cfg.get(
+                "Maximum_load_N",
+                2.0 * float(tire_cfg["Nominal_load_N"]),
+            )
+        )
+        fz = min(max(float(normal_force_N), 0.0), maximum_load)
+        initial_slope, peak_slip, peak_force, _, _ = (
+            self._tmeasy_axis_parameters("lateral", fz)
+        )
+        if peak_slip <= 0.0:
+            return initial_slope
+        return max(2.0 * peak_force / peak_slip, initial_slope)

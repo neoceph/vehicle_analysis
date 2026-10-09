@@ -7,5 +7,9 @@
   "Mass_kg": 14.0,
   "Inertia_kg_m2": [0.35, 0.67, 0.35],
   "Steering_angle_deg": 0.0,
-  "Brake_max_torque_Nm": 950.0
+  "Brake_max_torque_Nm": 950.0,
+  "Steering_notes": "Used only when ThreeWheelerModel(enable_steering=True), e.g. by cornering.py. The knuckle mass is taken from Mass_kg so the vehicle mass and CoG are unchanged.",
+  "Max_steering_angle_deg": 45.0,
+  "Steering_knuckle_mass_kg": 1.0,
+  "Steering_knuckle_inertia_kg_m2": [0.02, 0.02, 0.02]
 }

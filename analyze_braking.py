@@ -13,7 +13,7 @@ OUT = ROOT / "results"
 
 def main():
     if not CSV.exists():
-        raise FileNotFoundError(f"Missing {CSV}. Run simulation.py first.")
+        raise FileNotFoundError(f"Missing {CSV}. Run braking.py first.")
 
     df = pd.read_csv(CSV)
     braking = df[df["brake_input"] > 0].copy()

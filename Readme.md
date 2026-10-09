@@ -6,7 +6,7 @@ It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheel
 ## Files
 
 - `ThreeWheeler.py` — constructs the custom three-wheel multibody topology.
-- `simulation.py` — initializes the vehicle at the target speed, ramps the brakes, logs telemetry, and writes the braking summary.
+- `braking.py` — initializes the vehicle at the target speed, ramps the brakes, logs telemetry, and writes the braking summary.
 - `analyze_braking.py` — generates braking plots from the CSV.
 - `ThreeWheeler_Chassis.json` — mass, inertia, COM, and simple visualization dimensions.
 - `ThreeWheeler_RearSuspension.json` — rear axle position and track width; baseline is rigid.
@@ -23,7 +23,7 @@ The JSON files are **project parameter files consumed by the Python code**, not 
 From this directory:
 
 ```bash
-python simulation.py
+python braking.py
 python analyze_braking.py
 ```
 
@@ -81,6 +81,6 @@ Conventions and definitions:
 
 Cornering model assumptions:
 
-- `cornering.py` builds the model with `enable_steering=True`. The front wheel then spins on a steering knuckle that an angle motor turns about the vertical axis through the wheel center: no caster, trail, or scrub radius. The knuckle mass (`Steering_knuckle_mass_kg` in `ThreeWheeler_FrontWheel.json`) is taken from the front wheel mass, so total mass and CoG are unchanged. `simulation.py` keeps the fixed front wheel. `Steering_angle_deg` in `ThreeWheeler_FrontWheel.json` is still unused; the cornering steer angle comes from `Cornering_Config.json`.
+- `cornering.py` builds the model with `enable_steering=True`. The front wheel then spins on a steering knuckle that an angle motor turns about the vertical axis through the wheel center: no caster, trail, or scrub radius. The knuckle mass (`Steering_knuckle_mass_kg` in `ThreeWheeler_FrontWheel.json`) is taken from the front wheel mass, so total mass and CoG are unchanged. `braking.py` keeps the fixed front wheel. `Steering_angle_deg` in `ThreeWheeler_FrontWheel.json` is still unused; the cornering steer angle comes from `Cornering_Config.json`.
 - The chassis is rigid on compliant tires (rigid rear suspension), so the only roll compliance comes from the tires. Their damping acts only in compression, so a quick steering input excites a lightly damped roll oscillation, and the transient RI can overshoot its steady value.
 - With an open differential, a rear wheel that lifts off still receives half the drive torque and spins up freely.

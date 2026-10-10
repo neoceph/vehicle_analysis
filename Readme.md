@@ -29,7 +29,7 @@ The JSON files are **project parameter files consumed by the Python code**, not 
 
 ## Run
 
-From this directory:
+In order to run analysis run the corresponding routine from this directory. For example for braking analysis:
 
 ```bash
 python braking.py
@@ -69,10 +69,6 @@ The cornering study follows Rodriguez Licea et al. (2018), *The Rollover Risk in
 ```bash
 python cornering.py
 python analyze_cornering.py
-
-# Other conditions without editing the JSON (+ = left turn):
-python cornering.py --steering-deg 11 --speed-kph 30 --output results/steer11_telemetry.csv
-python analyze_cornering.py results/steer11_telemetry.csv
 ```
 
 Outputs (in `results/`):
@@ -105,8 +101,6 @@ python analyze_single_lane_change.py
 
 python double_lane_change.py
 python analyze_double_lane_change.py
-# Equivalent spelling supported:
-python analyze_double_lange_change.py
 ```
 
 Both simulations settle the vehicle at rest, initialize its forward speed, and hold that speed with the existing rear-wheel PI torque controller. Time zero in the CSV is after stationary settling. The maneuver is applied by the existing front-wheel steering angle motor, with no lateral-position feedback.

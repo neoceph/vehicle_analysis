@@ -37,6 +37,7 @@ python analyze_braking.py
 ```
 
 Outputs are written to `results/`.
+`analyze_braking.py` also writes `braking_performance.png`, the two-panel speed plot with the near-zero-speed point, stopping time, and stopping distance marked.
 
 ## Important calibration parameters
 

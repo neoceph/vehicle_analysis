@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import pandas as pd
+
+from graph_generation import BrakingAnalyzer
 
 
 ROOT = Path(__file__).resolve().parent
@@ -15,15 +16,12 @@ def main():
     if not CSV.exists():
         raise FileNotFoundError(f"Missing {CSV}. Run braking.py first.")
 
-    df = pd.read_csv(CSV)
-    braking = df[df["brake_input"] > 0].copy()
+    analyzer = BrakingAnalyzer(CSV)
+    braking = analyzer.braking_df
     if braking.empty:
         raise RuntimeError("No braking phase was found in the telemetry.")
 
-    t0 = braking["time"].iloc[0]
-    x0 = braking["Chassis_x"].iloc[0]
-    braking["braking_time"] = braking["time"] - t0
-    braking["braking_dist"] = braking["Chassis_x"] - x0
+    analyzer.generate_graphs(OUT / "braking_performance.png")
 
     plt.figure()
     plt.plot(braking["braking_time"], braking["speed_kph"])
@@ -66,6 +64,8 @@ def main():
     plt.close()
 
     print(f"Plots written to {OUT.resolve()}")
+    print(f"Stopping time:     {analyzer.stop_time:.2f} s")
+    print(f"Stopping distance: {analyzer.stop_dist:.2f} m")
 
 
 if __name__ == "__main__":

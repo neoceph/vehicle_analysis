@@ -42,8 +42,13 @@ def main():
     plt.close()
 
     plt.figure()
-    for wheel in ("Wheel_F", "Wheel_RL", "Wheel_RR"):
-        plt.plot(braking["braking_time"], braking[f"{wheel}_contact_Fz_N"], label=wheel)
+    for wheel, linestyle in (("Wheel_F", "-"), ("Wheel_RL", "--"), ("Wheel_RR", ":")):
+        plt.plot(
+            braking["braking_time"],
+            braking[f"{wheel}_contact_Fz_N"],
+            label=wheel,
+            linestyle=linestyle,
+        )
     plt.xlabel("Braking time [s]")
     plt.ylabel("Vertical tire contact force [N]")
     plt.legend()

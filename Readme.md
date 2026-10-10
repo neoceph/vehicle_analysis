@@ -1,6 +1,6 @@
-# Three-wheeler Chrono braking and cornering baseline
+# Three-wheeler Chrono braking, cornering, and lane changes
 
-This project is a **1 front + 2 rear** three-wheeler model for PyChrono, with a straight-line braking test and a constant steer-angle cornering test.
+This project is a **1 front + 2 rear** three-wheeler model for PyChrono, with straight-line braking, constant steer-angle cornering, and single/double lane-change tests.
 It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheeled-vehicle axle/suspension abstraction assumes left/right wheel pairs.
 
 ## Files
@@ -15,6 +15,15 @@ It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheel
 - `ThreeWheeler_Tire.json` — TMeasy tire/road force and vertical compliance properties.
 - `Braking_Config.json` — target speed, timestep, brake timing, road dimensions.
 - `cornering.py`, `analyze_cornering.py`, `Cornering_Config.json` — constant steer-angle cornering test (see below).
+
+Lane-change files:
+
+- `single_lane_change.py`, `SingleLaneChange_Config.json`: one prescribed front-wheel steer/countersteer pair.
+- `double_lane_change.py`, `DoubleLaneChange_Config.json`: an outbound pair, straight dwell, and reversed return pair.
+- `analyze_single_lane_change.py`, `analyze_double_lane_change.py`: telemetry plots and comparisons with the paper's linear lateral model.
+- `analyze_double_lange_change.py`: alternate entry point matching the spelling in the original request.
+- `lane_change.py`, `analyze_lane_change.py`: shared steering, telemetry extensions, and plots; reuse the cornering simulation and analysis helpers.
+- `test_lane_change.py`: steering-profile, configuration, and CSV validation tests.
 
 The JSON files are **project parameter files consumed by the Python code**, not stock Chrono::Vehicle subsystem JSON schemas.
 
@@ -84,3 +93,68 @@ Cornering model assumptions:
 - `cornering.py` builds the model with `enable_steering=True`. The front wheel then spins on a steering knuckle that an angle motor turns about the vertical axis through the wheel center: no caster, trail, or scrub radius. The knuckle mass (`Steering_knuckle_mass_kg` in `ThreeWheeler_FrontWheel.json`) is taken from the front wheel mass, so total mass and CoG are unchanged. `braking.py` keeps the fixed front wheel. `Steering_angle_deg` in `ThreeWheeler_FrontWheel.json` is still unused; the cornering steer angle comes from `Cornering_Config.json`.
 - The chassis is rigid on compliant tires (rigid rear suspension), so the only roll compliance comes from the tires. Their damping acts only in compression, so a quick steering input excites a lightly damped roll oscillation, and the transient RI can overshoot its steady value.
 - With an open differential, a rear wheel that lifts off still receives half the drive torque and spins up freely.
+
+## Single and double lane changes
+
+Run simulations in your environment with PyChrono installed (for this workspace, `conda activate chrono`). The analysis scripts need NumPy, pandas, and Matplotlib, but do not import PyChrono.
+
+```bash
+python single_lane_change.py
+python analyze_single_lane_change.py
+
+python double_lane_change.py
+python analyze_double_lane_change.py
+# Equivalent spelling supported:
+python analyze_double_lange_change.py
+```
+
+Both simulations settle the vehicle at rest, initialize its forward speed, and hold that speed with the existing rear-wheel PI torque controller. Time zero in the CSV is after stationary settling. The maneuver is applied by the existing front-wheel steering angle motor, with no lateral-position feedback.
+
+`Steering_angle_deg` is the signed **peak front-wheel angle**, not a steering-wheel angle. A positive value starts left; a negative value mirrors the maneuver. For one lane change of duration `T`, starting at `t0`, the angle is:
+
+```text
+q = (t - t0) / T
+delta = +A * sin(2*pi*q)^2   for 0 <= q < 0.5
+delta = -A * sin(2*pi*q)^2   for 0.5 <= q <= 1
+delta = 0                  outside the maneuver
+```
+
+Angle and angle rate are continuous at the entry, reversal, and exit. The double lane change applies this pair, holds zero steering for `Between_lane_changes_time_s`, then applies the negative of the same pair. The default signs are therefore `+ / -` for single and `+ / - / - / +` for double, with a dwell between the two pairs.
+
+Defaults in the separate JSON files are 30 km/h, a 5 deg peak front-wheel angle, a 1 s straight run-in, and 3 s per steer/countersteer pair. The double change has a 0.5 s dwell. The single run lasts 7 s; the double run lasts 10.5 s, including straight run-out after the input ends. Steering amplitudes above the front-wheel limit and runs too short to record the full input are rejected.
+
+Override conditions without editing JSON:
+
+```bash
+python single_lane_change.py --steering-deg -5 --speed-kph 30 --duration-s 3 --output results/single_right_telemetry.csv
+python analyze_single_lane_change.py results/single_right_telemetry.csv
+
+python double_lane_change.py --steering-deg 6 --duration-s 2.5 --dwell-s 0.5 --max-time-s 10 --output results/double6_telemetry.csv
+python analyze_double_lane_change.py results/double6_telemetry.csv
+```
+
+`--start-s` overrides the steering start time. All simulation times are in seconds. CSV paths can be absolute or relative to this project, and the plotting scripts accept an optional CSV path.
+
+Outputs in `results/`, prefixed with `single_lane_change` or `double_lane_change`:
+
+- `*_telemetry.csv`: the cornering telemetry columns, including commanded/actual steering, speed, sideslip, yaw rate, roll, lateral acceleration, measured `RI`, acceleration-based `RI_model`, CoG and wheel poses, tire loads, forces, and slips. Adds `maneuver_phase`, `longitudinal_displacement_m`, `lateral_displacement_m`, and `heading_change_deg` relative to the first sample.
+- `*_summary.json`: vehicle parameters, steering profile and timing, input completion status, final/peak lateral displacement, final heading change, peak responses, wheel lift, and rollover status. Constant-turn steady-state results are not calculated for these transient maneuvers.
+- `*_inputs.png`: commanded vs actual steering, speed hold, and drive torque.
+- `*_lateral_response.png`: sideslip, yaw rate, and lateral acceleration vs the paper's linear model.
+- `*_rollover.png`: measured RI, acceleration estimate, linear-model RI, normalized rear-wheel loads, and roll angle.
+- `*_tires.png`: vertical tire loads, lateral forces, slip angles, and a final-value table.
+- `*_trajectory.png`: an equal-scale plan view and lateral displacement over time.
+
+The plotting scripts can also read a CSV without its summary; then they omit the linear-model overlay and show tire loads in newtons rather than normalized by weight.
+
+### Relationship to the reference paper
+
+Section 4 and Figures 4-8 of `references/rollover_2018.pdf` motivate the prescribed-angle, constant-speed test and its measured responses. These scripts reuse the existing analysis of Eqs. (14), (16), (24), (26), and (27), driven by the actual simulated steering angle and speed. The RI sign convention is the same as the cornering test above. No differential-braking rollover mitigation controller is applied.
+
+The paper describes a 1:19 steering reduction and validates at 14 m/s (50.4 km/h). Our input is already the front-wheel angle, so no ratio conversion is applied. The smooth lobes here are configurable test inputs, not an exact digitization of Figure 4; the project vehicle, tires, and default speed also differ from Table 1. Lane width and return accuracy are outputs of the vehicle dynamics, not enforced geometric constraints or an ISO cone-course compliance test.
+
+Run the focused checks in the Chrono environment:
+
+```bash
+python -m unittest -v test_lane_change
+```

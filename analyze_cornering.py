@@ -228,6 +228,12 @@ def _title(fig, title: str, subtitle: str):
 def _conditions(summary: dict[str, Any] | None, df: pd.DataFrame) -> str:
     if summary is None:
         return f"Run length {df['time'].iloc[-1]:.1f} s"
+    if summary.get("test") in ("single_lane_change", "double_lane_change"):
+        return (
+            f"{summary['target_speed_kph']:.1f} km/h, prescribed front-wheel angle "
+            f"{summary['steering_angle_deg']:+.1f} deg peak, road friction "
+            f"{summary['road_friction']:.2f}, {summary['total_mass_kg']:.0f} kg"
+        )
     side = "left" if summary["steering_angle_deg"] >= 0.0 else "right"
     return (
         f"{summary['target_speed_kph']:.0f} km/h, constant front-wheel steer "
@@ -335,7 +341,11 @@ def plot_lateral_response(
             )
         ax.set_title(title)
         ax.set_ylabel(label)
-    axes[0].legend(loc="lower right", ncols=2)
+    if linear is None or (summary or {}).get("test") in ("single_lane_change", "double_lane_change"):
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.1, 0.925), ncols=2, fontsize=8.5)
+    else:
+        axes[0].legend(loc="lower right", ncols=2)
     axes[-1].set_xlabel("Time (s)")
     _window_note(fig, summary)
     fig.savefig(out, dpi=180)
@@ -487,7 +497,12 @@ def plot_tires(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path):
     axes = [fig.add_subplot(grid[0])]
     axes += [fig.add_subplot(grid[i], sharex=axes[0]) for i in (1, 2)]
     panels = (
-        ("contact_Fz_N", "Vertical tire load / mg (paper normalization)", "Fz / mg (–)", weight),
+        (
+            "contact_Fz_N",
+            "Vertical tire load / mg (paper normalization)" if weight else "Vertical tire load",
+            "Fz / mg (–)" if weight else "Fz (N)",
+            weight,
+        ),
         ("Fy_wheel_N", "Lateral tire force (wheel heading frame, + = left)", "Fy (N)", None),
         ("slip_angle_deg", "Tire slip angle (+ = produces a left force)", "α (°)", None),
     )

@@ -99,12 +99,18 @@ class CorneringSimulation:
         RI_model = 2 h l a_y / (b g l_f) - l (b_r - b_l) / (b l_f)
     """
 
+    test_name = "constant_steer_angle"
+    run_description = "constant steer-angle"
+
     def __init__(
         self,
         steering_angle_deg: float | None = None,
         target_speed_kph: float | None = None,
+        config_file: str = CONFIG_FILE,
+        config_overrides: dict[str, Any] | None = None,
     ):
-        self.cfg = load_json(CONFIG_FILE)
+        self.cfg = load_json(config_file)
+        self.cfg.update(config_overrides or {})
         if steering_angle_deg is not None:
             self.cfg["Steering_angle_deg"] = float(steering_angle_deg)
         if target_speed_kph is not None:
@@ -112,7 +118,7 @@ class CorneringSimulation:
 
         self.model = ThreeWheelerModel(
             enable_steering=True,
-            scenario_config=CONFIG_FILE,
+            scenario_config=config_file,
         )
         self.telemetry_data: list[dict[str, Any]] = []
 
@@ -417,15 +423,18 @@ class CorneringSimulation:
 
         self.telemetry_data.append(frame)
 
-    def run(self):
-        last_sample_time = -1.0e9
-        print("Starting three-wheeler headless constant steer-angle simulation...")
-        print(f"Stationary contact settling: {self.settle_time:.3f} s")
-        print(f"Target speed:   {self.target_speed * 3.6:.1f} km/h")
+    def _print_control_summary(self):
         print(
             f"Steering angle: {math.degrees(self.steering_angle):.2f} deg "
             f"(front wheel, + = left) from t = {self.steering_start:.2f} s"
         )
+
+    def run(self):
+        last_sample_time = -1.0e9
+        print(f"Starting three-wheeler headless {self.run_description} simulation...")
+        print(f"Stationary contact settling: {self.settle_time:.3f} s")
+        print(f"Target speed:   {self.target_speed * 3.6:.1f} km/h")
+        self._print_control_summary()
         print(f"Total modeled mass: {self.mass:.1f} kg")
 
         while self._test_time() < self.max_time:
@@ -528,6 +537,9 @@ class CorneringSimulation:
             )
         return result
 
+    def _extra_summary_fields(self, df: pd.DataFrame) -> dict[str, Any]:
+        return {}
+
     def export_results(self, output_path=DEFAULT_OUTPUT):
         out_file = ROOT / output_path
         out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -545,7 +557,7 @@ class CorneringSimulation:
         ri = df["RI"].abs()
         peak_row = int(ri.idxmax()) if ri.notna().any() else None
         summary: dict[str, Any] = {
-            "test": "constant_steer_angle",
+            "test": self.test_name,
             "target_speed_kph": float(self.cfg["Target_speed_kph"]),
             "steering_angle_deg": float(self.cfg["Steering_angle_deg"]),
             "steering_start_time_s": self.steering_start,
@@ -576,6 +588,7 @@ class CorneringSimulation:
             "max_abs_ay_g": float(df["ay_g"].abs().max()),
             "steady_state": self._steady_state(df),
         }
+        summary.update(self._extra_summary_fields(df))
 
         summary_file = _summary_path(out_file)
         summary_file.write_text(

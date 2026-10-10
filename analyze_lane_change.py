@@ -22,6 +22,8 @@ from analyze_cornering import (
     _apply_style,
     _conditions,
     _figure_prefix,
+    _legend,
+    _shade_ri_danger_zones,
     _summary_path,
     _title,
     linear_model_response,
@@ -55,7 +57,7 @@ def plot_inputs(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path):
     ax.axhline(0.0, color=AXIS, lw=0.8)
     ax.set_title("Front-wheel angle (+ = left)")
     ax.set_ylabel("Steering (deg)")
-    ax.legend(loc="upper right", ncols=2)
+    _legend(ax)
 
     ax = axes[1]
     ax.plot(time, df["speed_kph"], color=SIM_COLOR, label="Actual")
@@ -63,7 +65,7 @@ def plot_inputs(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path):
         ax.axhline(summary["target_speed_kph"], color=MODEL_COLOR, lw=1.2, linestyle="--", label="Target")
     ax.set_title("Vehicle speed")
     ax.set_ylabel("Speed (km/h)")
-    ax.legend(loc="best", ncols=2)
+    _legend(ax)
 
     ax = axes[2]
     ax.plot(time, df["drive_torque_Nm"], color=SIM_COLOR)
@@ -96,9 +98,10 @@ def plot_rollover(
         ax.plot(time, linear["RI"], color=MODEL_COLOR, linestyle="--", label="Linear model (Eq. 27)")
     for limit in (-1.0, 1.0):
         ax.axhline(limit, color=CRITICAL, lw=0.9, linestyle=":")
+    _shade_ri_danger_zones(ax)
     ax.set_title("Rollover index (RI = +1: rear left unloaded; -1: rear right unloaded)")
     ax.set_ylabel("RI (-)")
-    ax.legend(loc="upper left", bbox_to_anchor=(0.0, -0.12), ncols=3, fontsize=8)
+    _legend(ax)
 
     weight = None
     if summary:
@@ -110,7 +113,7 @@ def plot_rollover(
     ax.axhline(0.0, color=CRITICAL, lw=0.9, linestyle=":")
     ax.set_title("Rear-wheel vertical loads")
     ax.set_ylabel("Fz / mg (-)" if weight else "Fz (N)")
-    ax.legend(loc="best", ncols=2)
+    _legend(ax)
 
     ax = axes[2]
     ax.plot(time, df["roll_deg"], color=SIM_COLOR)
@@ -136,7 +139,7 @@ def plot_trajectory(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path)
     ax.set_xlabel("Longitudinal displacement (m)")
     ax.set_ylabel("Lateral displacement (m)")
     ax.set_aspect("equal", adjustable="datalim")
-    ax.legend(loc="upper left", bbox_to_anchor=(0.0, 1.0), ncols=2, fontsize=8)
+    _legend(ax)
 
     ax = axes[1]
     ax.plot(df["time"], y, color=SIM_COLOR)

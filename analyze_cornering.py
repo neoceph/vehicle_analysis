@@ -27,6 +27,7 @@ GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
 WINDOW = "#f0efec"
 CRITICAL = "#d03b3b"
+DANGER_ALPHA = 0.14
 SERIES = ("#2a78d6", "#eb6834", "#1baf7a")
 
 SIM_COLOR = SERIES[0]
@@ -84,8 +85,6 @@ def _apply_style():
             "ytick.color": MUTED,
             "xtick.labelcolor": INK_SECONDARY,
             "ytick.labelcolor": INK_SECONDARY,
-            "legend.frameon": False,
-            "legend.fontsize": 9,
             "lines.linewidth": 1.7,
             "lines.solid_capstyle": "round",
             "lines.solid_joinstyle": "round",
@@ -198,11 +197,41 @@ def linear_steady_state(p: dict[str, float], speed: float, steer_rad: float) -> 
 # ----------------------------------------------------------------------
 # Figures
 # ----------------------------------------------------------------------
+def _legend(ax):
+    legend = ax.legend(
+        loc="best",
+        ncols=1,
+        fontsize=8.5,
+        labelcolor=INK_SECONDARY,
+        frameon=True,
+        facecolor=SURFACE,
+        edgecolor=GRID,
+        framealpha=0.9,
+        fancybox=False,
+        borderaxespad=0.6,
+        borderpad=0.5,
+        labelspacing=0.4,
+        handlelength=2.0,
+        handletextpad=0.7,
+    )
+    legend.get_frame().set_linewidth(0.6)
+    return legend
+
+
 def _shade_window(ax, summary: dict[str, Any] | None):
     steady = (summary or {}).get("steady_state")
     if steady:
         start, end = steady["window_s"]
         ax.axvspan(start, end, color=WINDOW, zorder=0, lw=0)
+
+
+def _shade_ri_danger_zones(ax):
+    ymin, ymax = ax.get_ylim()
+    if ymax > 1.0:
+        ax.axhspan(1.0, ymax, color=CRITICAL, alpha=DANGER_ALPHA, zorder=0.1, lw=0)
+    if ymin < -1.0:
+        ax.axhspan(ymin, -1.0, color=CRITICAL, alpha=DANGER_ALPHA, zorder=0.1, lw=0)
+    ax.set_ylim(ymin, ymax)
 
 
 def _window_note(fig, summary: dict[str, Any] | None):
@@ -341,11 +370,7 @@ def plot_lateral_response(
             )
         ax.set_title(title)
         ax.set_ylabel(label)
-    if linear is None or (summary or {}).get("test") in ("single_lane_change", "double_lane_change"):
-        handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.1, 0.925), ncols=2, fontsize=8.5)
-    else:
-        axes[0].legend(loc="lower right", ncols=2)
+    _legend(axes[0])
     axes[-1].set_xlabel("Time (s)")
     _window_note(fig, summary)
     fig.savefig(out, dpi=180)
@@ -448,16 +473,9 @@ def plot_rollover(
     extent = max(1.15, float(ri_values.abs().max()) * 1.05 if not ri_values.empty else 1.15)
     extent = min(extent, 3.0)
     ax.set_ylim(-extent, extent)
+    _shade_ri_danger_zones(ax)
     ax.set_ylabel("RI (–)")
-    # The legend goes in the half the RI does not use (below zero in a
-    # left turn), clear of the |RI| = 1 lines.
-    left_turn = float(df["RI"].median()) >= 0.0 if not finite.empty else True
-    legend_y = (1.0 - 0.85 / extent) / 2.0 + 0.03
-    ax.legend(
-        loc="lower right" if left_turn else "upper right",
-        bbox_to_anchor=(1.0, legend_y if left_turn else 1.0 - legend_y),
-        fontsize=8.5,
-    )
+    _legend(ax)
 
     ax = axes[1]
     _shade_window(ax, summary)
@@ -517,7 +535,7 @@ def plot_tires(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path):
         ax.set_ylabel(label)
         if ax is not axes[-1]:
             plt.setp(ax.get_xticklabels(), visible=False)
-    axes[0].legend(loc="lower right", bbox_to_anchor=(1.0, 1.0), ncols=3)
+    _legend(axes[0])
     axes[-1].set_xlabel("Time (s)")
 
     # Table view: the values the lines show, so no wheel is read by color alone.
@@ -649,7 +667,7 @@ def plot_trajectory(df: pd.DataFrame, summary: dict[str, Any] | None, out: Path)
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlabel("X (m)")
     ax.set_ylabel("Y (m)")
-    ax.legend(loc="lower left", bbox_to_anchor=(0.0, 1.0), ncols=3, fontsize=8.5)
+    _legend(ax)
     fig.savefig(out, dpi=180)
     plt.close(fig)
 

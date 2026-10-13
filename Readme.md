@@ -13,6 +13,7 @@ It intentionally does **not** instantiate `veh.Sedan()`, because the stock wheel
 - `ThreeWheeler_FrontWheel.json` — front wheel dimensions/inertia/brake torque.
 - `ThreeWheeler_RearWheel.json` — rear wheel dimensions/inertia/brake torque.
 - `ThreeWheeler_Tire.json` — TMeasy tire/road force and vertical compliance properties.
+- `ThreeWheeler_Bicycle_Tire.json` — bicycle tire alternative; lateral characteristics fitted to `references/bicycle_tire_sideslip_2015.pdf` (the file's `Derivation` block lists what is measured and what is assumed). Select it with the environment variable `THREEWHEELER_TIRE=ThreeWheeler_Bicycle_Tire.json`.
 - `Braking_Config.json` — target speed, timestep, brake timing, road dimensions.
 - `cornering.py`, `analyze_cornering.py`, `Cornering_Config.json` — constant steer-angle cornering test (see below).
 
